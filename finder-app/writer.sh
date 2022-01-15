@@ -1,32 +1,43 @@
 #!/bin/bash
 
+#File Name: writer.sh
+#
+#A script to write/overwrite a string to a file in a particular directory
+#
+#References:
+#https://www.cyberciti.biz/faq/create-a-file-in-linux-using-the-bash-shell-#terminal/
+#
+#https://stackoverflow.com/questions/10124314/grab-the-filename-in-unix-out-#of-full-path/10124347#10124347
+
+
 writefile=$1
 writestr=$2
 
-if ! [ $# -eq 2 ]
+if ! [ $# -eq 2 ] # to check if the number of arguments is 2 
 then
-	echo "incorrect usage"
+	echo "ERROR: Invalid Number of arguments"
+	echo "The order of the arguments should be:"
+	echo "	1) The Path to the file"
+	echo "	2) Text to be written to the above file"
 	exit 1
 fi 
 
-filename=$(basename $writefile)
+#Seperating the filename and path from the argument
+filename=$(basename $writefile) 
 filepath=$(dirname $writefile)
 
-if  [ -d "$filepath" ]
+if  [ -d "$filepath" ] # to check if directory is present
 then 
-	echo "Path exists"
 	cd $filepath
-	echo "path = $filepath"
-	echo "name = $filename"
 	echo "$writestr" > $filename
 	
-	if [ $? -eq 0 ]
+	if [ $? -eq 0 ] #To check if string was written to the file
 	then
 		echo "$writestr written in $writefile"
 		exit 0
 	
 	else
-		echo "Unable to write"
+		echo "ERROR: Unable to write"
 		exit 1
 	
 	fi
@@ -37,13 +48,13 @@ else
 	cd $filepath
 	echo "$writestr" > $filename
 	
-	if [ $? -eq 0 ]
+	if [ $? -eq 0 ] #To check if string was written to the file
 	then
 		echo "$writestr written in $writefile"
 		exit 0
 	
 	else
-		echo "Unable to write"
+		echo "ERROR: Unable to write"
 		exit 1
 	
 	fi
