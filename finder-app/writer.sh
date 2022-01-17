@@ -10,8 +10,6 @@
 #https://stackoverflow.com/questions/10124314/grab-the-filename-in-unix-out-#of-full-path/10124347#10124347
 
 
-writefile=$1
-writestr=$2
 
 if ! [ $# -eq 2 ] # to check if the number of arguments is 2 
 then
@@ -21,6 +19,9 @@ then
 	echo "	2) Text to be written to the above file"
 	exit 1
 fi 
+
+writefile=$1
+writestr=$2
 
 #Seperating the filename and path from the argument
 filename=$(basename $writefile) 
@@ -36,10 +37,15 @@ then
 		echo "$writestr written in $writefile"
 		exit 0
 	
-	else
-		echo "ERROR: Unable to write"
+	
+	elif ![ -f "$writefile" ] #To check if file is present
+	then
+		echo "File Could not be created"
 		exit 1
 	
+	else                     #File is present but unable to write
+		echo "Unable to write to file"
+		exit 1
 	fi
 
 else
@@ -48,15 +54,21 @@ else
 	cd $filepath
 	echo "$writestr" > $filename
 	
-	if [ $? -eq 0 ] #To check if string was written to the file
+if [ $? -eq 0 ] #To check if string was written to the file
 	then
 		echo "$writestr written in $writefile"
 		exit 0
 	
-	else
-		echo "ERROR: Unable to write"
+	
+	elif ![ -f "$writefile" ] #To check if file is present
+	then
+		echo "File Could not be created"
 		exit 1
 	
+	else                     #File is present but unable to write
+		echo "Unable to write to file"
+		exit 1
 	fi
+
 
 fi
