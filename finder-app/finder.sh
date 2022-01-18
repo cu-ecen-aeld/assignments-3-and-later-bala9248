@@ -29,7 +29,7 @@ fi
 num_file=$(find /$filesdir -type f  | wc -l) #To find the number of files
 
 cd $filesdir 
-num_line=$(grep -r "$searchstr" * | wc -l) #To find the number of lines
+num_line=$(grep -r "$searchstr" . | wc -l) #To find the number of lines
 
 echo "The number of files are ${num_file} and the number of matching lines are ${num_line}"
 
