@@ -15,5 +15,5 @@
 void test_validate_my_username()
 {
     //Assert to check if both strings are equal
-    TEST_ASSERT_EQUAL_STRING(malloc_username_from_conf_file(), my_username() );
+    TEST_ASSERT_EQUAL_STRING_MESSAGE(malloc_username_from_conf_file(), my_username(), "Username mismatch - Fix this!!!" );
 }
