@@ -1,15 +1,14 @@
 #!/bin/bash
-
 #File Name: writer.sh
 #
 #A script to write/overwrite a string to a file in a particular directory
+#
+#Author: Balapranesh Elango
 #
 #References:
 #https://www.cyberciti.biz/faq/create-a-file-in-linux-using-the-bash-shell-#terminal/
 #
 #https://stackoverflow.com/questions/10124314/grab-the-filename-in-unix-out-#of-full-path/10124347#10124347
-
-
 
 if ! [ $# -eq 2 ] # to check if the number of arguments is 2 
 then
@@ -27,48 +26,30 @@ writestr=$2
 filename=$(basename $writefile) 
 filepath=$(dirname $writefile)
 
-if  [ -d "$filepath" ] # to check if directory is present
+if  ! [ -d "$filepath" ] # to check if directory is present
 then 
-	cd $filepath
-	echo "$writestr" > $filename
-	
-	if [ $? -eq 0 ] #To check if string was written to the file
-	then
-		echo "$writestr written in $writefile"
-		exit 0
-	
-	
-	elif ![ -f "$writefile" ] #To check if file is present
-	then
-		echo "File Could not be created"
-		exit 1
-	
-	else                     #File is present but unable to write
-		echo "Unable to write to file"
-		exit 1
-	fi
-
-else
 	echo "Path does not exist, creating path now..."
 	mkdir $filepath
-	cd $filepath
-	echo "$writestr" > $filename
+fi
+
+cd $filepath
+> $filename
+
+if ! [ -f  "$filename" ]
+then
+	echo "ERROR: File could not be created"
+	exit 1
 	
+fi
+
+echo "$writestr" > $filename #writing the string to the file
+
 if [ $? -eq 0 ] #To check if string was written to the file
-	then
-		echo "$writestr written in $writefile"
-		exit 0
+then
+	echo "$writestr written in $writefile"
+	exit 0
 	
-	
-	elif ![ -f "$writefile" ] #To check if file is present
-	then
-		echo "File Could not be created"
-		exit 1
-	
-	else                     #File is present but unable to write
-		echo "Unable to write to file"
-		exit 1
-	fi
-
-
+else
+	echo "ERROR: $writestr could not be written in $writefile"
+	exit 1
 fi
