@@ -14,9 +14,6 @@
 */
 void test_validate_my_username()
 {
-    /**
-     * TODO: Replace the line below with your code here as described above to verify your /conf/username.txt 
-     * config file and my_username() functions are setup properly
-     */
+    //Assert to check if both strings are equal
     TEST_ASSERT_EQUAL_STRING(malloc_username_from_conf_file(), my_username() );
 }
