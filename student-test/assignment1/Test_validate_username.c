@@ -15,5 +15,7 @@
 void test_validate_my_username()
 {
     //Assert to check if both strings are equal
-    TEST_ASSERT_EQUAL_STRING_MESSAGE(malloc_username_from_conf_file(), my_username(), "Username mismatch - Fix this!!!" );
+    char *username_from_conf = malloc_username_from_conf_file();
+    TEST_ASSERT_EQUAL_STRING_MESSAGE(username_from_conf, my_username(), "Username mismatch - Fix this!!!" );
+    free(username_from_conf); //Freeing malloced memory
 }
