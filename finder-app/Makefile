@@ -3,6 +3,7 @@ CFLAGS= -g -Wall
 TARGET= writer
 SRCS:= writer.c
 
+
 $(TARGET): $(TARGET).o
 	$(CC) $(CFLAGS)  $(TARGET).o -o $(TARGET)
 	
