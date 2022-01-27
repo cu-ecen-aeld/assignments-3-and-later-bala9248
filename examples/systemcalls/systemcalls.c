@@ -21,7 +21,7 @@ bool do_system(const char *cmd)
    
     int status = system(cmd);  //calling system() with command cmd
     
-    if(status != 0){
+    if(status == -1){
     	printf("\nERROR: system() call failed");
     	syslog(LOG_ERR, "ERROR: system() call failed");
     	return false;
@@ -180,7 +180,7 @@ bool do_exec_redirect(const char *outputfile, int count, ...)
     	//Exec should not return
     	printf("\nERROR: Exec Returned");
     	syslog(LOG_ERR, "ERROR: Exec Returned");
-    	exit(-1);
+    	exit(1);
     }
     
     else if (pid > 0) {
