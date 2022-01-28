@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 #File Name: finder.sh
 #
 #A script to find the number of occurences of a string in a directory
