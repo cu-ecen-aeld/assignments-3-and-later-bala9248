@@ -1,3 +1,15 @@
+/*****************************************************************
+*File: systemcalls.c
+*
+*Brief:Implements the required functions for AESD assignment 3 part 1 using
+*system calls
+*
+*Author: Balapranesh Elango
+*
+*Reference: Lecture Video and Reading
+********************************************************************/
+
+
 #include "systemcalls.h"
 
 /**
@@ -19,6 +31,11 @@ bool do_system(const char *cmd)
    
    openlog("systemcalls.c - LOG", LOG_PID, LOG_USER); //Opening syslog for logging using LOG_USER facility
    
+    if(cmd == NULL){
+    	printf("\nERROR: cmd is NULL");
+    	syslog(LOG_ERR, "cmd is NULL");
+    	return false;
+    }
     int status = system(cmd);  //calling system() with command cmd
     
     if(status == -1){
@@ -77,9 +94,11 @@ bool do_exec(int count, ...)
     int status;
     int ret_status;
     pid_t pid;
+
+    openlog("systemcalls.c - LOG", LOG_PID, LOG_USER); //Opening syslog for logging using LOG_USER facility
+    
     pid = fork(); //fork to create a new child process
     
-    openlog("systemcalls.c - LOG", LOG_PID, LOG_USER); //Opening syslog for logging using LOG_USER facility
     if (pid == -1) {   //Fork error check
     	printf("\nERROR: Fork failed");
     	syslog(LOG_ERR, "ERROR: Fork failed");
@@ -152,9 +171,10 @@ bool do_exec_redirect(const char *outputfile, int count, ...)
     int status;
     int ret_status;
     pid_t pid;
-    pid = fork(); //fork to create a new child process
     
     openlog("systemcalls.c - LOG", LOG_PID, LOG_USER); //Opening syslog for logging using LOG_USER facility
+    
+    pid = fork(); //fork to create a new child process
     
     //create file to redirect output
     int fd = open(outputfile, O_WRONLY|O_TRUNC|O_CREAT, 0644);
@@ -171,16 +191,18 @@ bool do_exec_redirect(const char *outputfile, int count, ...)
     }  
 	
     else if(!pid) { //child process
+    
     	if (dup2(fd, 1) < 0){ //duplicate fd with fd value 1
     		printf("\n\rFailure");
     		return false;
     	}
+    
     	close(fd);
     	status = execv(command[0], command); //Exec in child process
     	//Exec should not return
     	printf("\nERROR: Exec Returned");
     	syslog(LOG_ERR, "ERROR: Exec Returned");
-    	exit(1);
+    	exit(-1);
     }
     
     else if (pid > 0) {

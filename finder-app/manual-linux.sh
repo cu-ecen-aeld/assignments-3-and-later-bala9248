@@ -22,9 +22,9 @@ else
 fi
 
 
-
-mkdir -p ${OUTDIR}
+mkdir -p ${OUTDIR} 
 	
+#To check if Directory exists after creating it
 if  ! [ -d "${OUTDIR}" ]
 then
 	echo "ERROR: Directory could not be created"
@@ -106,7 +106,7 @@ ${CROSS_COMPILE}readelf -a bin/busybox | grep "program interpreter"
 ${CROSS_COMPILE}readelf -a bin/busybox | grep "Shared library"
 
 # TODO: Add library dependencies to rootfs
-SYSROOT=$(${CROSS_COMPILE}gcc -print-sysroot)
+export SYSROOT=$(${CROSS_COMPILE}gcc -print-sysroot)
 cp $SYSROOT/lib/ld-linux-aarch64.so.1 lib
 cp $SYSROOT/lib64/libm.so.6 lib64
 cp $SYSROOT/lib64/libresolv.so.2 lib64
