@@ -33,6 +33,9 @@ echo "Writing ${NUMFILES} files containing string ${WRITESTR} to ${WRITEDIR}"
 rm -rf "${WRITEDIR}"
 mkdir -p "$WRITEDIR"
 
+WRITER_BIN_UTIL="writer"
+FINDER_BIN_UTIL="finder.sh"
+
 #The WRITEDIR is in quotes because if the directory path consists of spaces, then variable substitution will consider it as multiple argument.
 #The quotes signify that the entire string in WRITEDIR is a single string.
 #This issue can also be resolved by using double square brackets i.e [[ ]] instead of using quotes.
@@ -47,15 +50,13 @@ fi
 #To check if writer is in path
 if [ -z $(which writer) ]
 then 
-	echo "writer not in path"
-	exit 1
+	WRITER_BIN_UTIL="./writer" #path is empty 
 fi
 
 #To check if finder.sh is in path
 if [ -z $(which finder.sh) ]
 then 
-	echo "finder.sh not in path"
-	exit 1
+	FINDER_BIN_UTIL="./finder.sh" #path is empty
 fi
 
 
