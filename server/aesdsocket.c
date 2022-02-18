@@ -133,7 +133,10 @@ int main(int argc, char *argv[]) {
 
 				
 		char* buf; 
-		buf = (char*) calloc (0, buf_size*sizeof(char));
+		buf = (char*) calloc (buf_size, sizeof(char));
+		if (buf == NULL){
+			exit -1;
+		}
 		int req_size = 0;
 		while (1) {
 		
@@ -146,11 +149,13 @@ int main(int argc, char *argv[]) {
 			
 			syslog(LOG_DEBUG, "received string = %s", temp_buf);
 			
+			strncat(buf, temp_buf, numbytes);	
 			
 			if(numbytes > 0) {
 				
 				req_size += numbytes;
-				total_size += req_size;	
+				total_size += req_size;
+				syslog(LOG_DEBUG, "realloc size = %d", req_size);	
 				buf = (char*)realloc(buf, req_size);
 				if (buf == NULL) {
 					log_message(LOG_ERR, "ERROR: malloc() fail");
@@ -158,10 +163,10 @@ int main(int argc, char *argv[]) {
 				}
 			}
 			
-			strncat(buf, temp_buf, numbytes);	
 			
-		        if(strchr(temp_buf, '\n') != NULL)
+		        if(strchr(temp_buf, '\n') != NULL){
 				break;
+			}
 			
 		}
 	 	
