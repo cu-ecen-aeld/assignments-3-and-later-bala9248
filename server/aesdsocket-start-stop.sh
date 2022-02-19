@@ -1,4 +1,5 @@
 #!/bin/sh
+#Busybox init script for starting and stopping aesdsocket in Daemon mode
 
 case "$1" in 
 	start)
