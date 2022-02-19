@@ -26,10 +26,39 @@
 #define FALSE    (0)
 #define TRUE     (1)
 #define log_message syslog
+#define FILE_PATH "/var/tmp/aesdsocketdata"
+#define BUF_SIZE (100)
+
+struct addrinfo *res ;
+int sockfd, newsockfd;
+int fd;
+char* buf = NULL; 
+
 static void graceful_exit(int status){
-	//close all fds
-	//close log
+
+	if(sockfd > -1){
+		shutdown(sockfd, SHUT_RDWR);
+		close(sockfd);
+	}
+	
+	if(newsockfd > -1){
+		shutdown(newsockfd, SHUT_RDWR);
+		close(newsockfd);
+	}
+	
+	if(fd > -1){
+		close(fd);
+	}
+	
+	//if(buf != NULL)
+	//	free(buf);
+	
+	//if(res != NULL)
+	//	free(res);
+		
+	unlink(FILE_PATH);
 	closelog();
+	
 	exit (status);
 }
 
@@ -37,37 +66,56 @@ static void daemon_start(){
  	/* create new process */
  	pid_t pid = fork ( );
  	if (pid == -1)
- 		exit -1;
+ 		graceful_exit(-1);
+ 		
  	else if (pid != 0)
  		exit (EXIT_SUCCESS);
  	/* create new session and process group */
 	 if (setsid ( ) == -1)
- 		exit -1;
+ 		graceful_exit(-1);
  	/* set the working directory to the root directory */
  	if (chdir ("/") == -1)
- 		exit -1;
+ 		graceful_exit(-1);
 
  	/* redirect fd's 0,1,2 to /dev/null */
  	open ("/dev/null", O_RDWR); /* stdin */
  	dup (0); /* stdout */
  	dup (0); /* stderror */
+ 	
+}
+
+static void signal_handler(int signum){
+	syslog(LOG_INFO, "Signal Caught==>%d", signum);
+	graceful_exit(0);
 }
 
 /* Application entry point */
 int main(int argc, char *argv[]) {
 
 	int rc; 
-	struct addrinfo hints, *res ;
+	struct addrinfo hints;
 	struct sockaddr cli_addr;
-	bool daemon = FALSE;
-	int sockfd, newsockfd;
+	bool daemon_fl = FALSE;
 	socklen_t clilen;
 	
-	printf("Starting aesdsocket!!!");
 	
-	//if( !strcmp("-d", argv[1]) ) //Check to see if -d was specified
-	//	daemon = TRUE;	
-
+	if( argc > 1 && !strcmp("-d", (char *)argv[1]) ) //Check to see if -d was specified
+		daemon_fl = TRUE;	
+	
+	sig_t sig_rc;
+	sig_rc = signal(SIGTERM, signal_handler);
+	if(sig_rc == SIG_ERR){
+		log_message(LOG_ERR, "ERROR: Sigterm signal() fail");
+		graceful_exit(-1);
+	}
+	
+	sig_rc = signal(SIGINT, signal_handler);
+	if(sig_rc == SIG_ERR){
+		log_message(LOG_ERR, "ERROR: sigint signal() fail");
+		graceful_exit(-1);
+	}
+	
+	
 	openlog("aesdscoket.c - LOG", LOG_PID, LOG_USER); //Opening syslog for logging using LOG_USER facility
 	
 	memset(&hints, 0, sizeof(hints) );
@@ -94,10 +142,13 @@ int main(int argc, char *argv[]) {
 		graceful_exit(-1);
 	}
 	
-	if(daemon == TRUE)
-		daemon_start();
+	freeaddrinfo(res);
 	
-	free(res);
+	if(daemon_fl == TRUE){
+		syslog(LOG_INFO, "Running as daemon");
+		daemon_start();
+	}
+
 
 	rc = listen(sockfd, BACKLOG);
 	if(rc == -1){
@@ -108,7 +159,7 @@ int main(int argc, char *argv[]) {
 	
 	clilen = sizeof(cli_addr);
 	
-	int fd = creat("/var/tmp/aesdsocketdata", 0644);
+	fd = creat(FILE_PATH, 0644);
 	if( fd == -1 ){
 		log_message(LOG_ERR, "ERROR: creat() fail");
 		graceful_exit(-1);
@@ -124,57 +175,50 @@ int main(int argc, char *argv[]) {
 			graceful_exit(-1);
      		}
 	
-		printf("Accepted connection from XXX");
+
 		log_message(LOG_INFO, "“Accepted connection from %s", cli_addr.sa_data);
 		
 		
-		int buf_size = 100;
-		char temp_buf[buf_size];
-
-				
-		char* buf; 
-		buf = (char*) calloc (buf_size, sizeof(char));
-		if (buf == NULL){
-			exit -1;
-		}
-		int req_size = 0;
-		while (1) {
+		char temp_buf[BUF_SIZE] = {0};
 		
-			memset(temp_buf, 0, buf_size);
-			int numbytes = recv(newsockfd, temp_buf, buf_size, 0);		
+		buf = (char*) calloc (BUF_SIZE, sizeof(char));
+		
+		if (buf == NULL){
+			log_message(LOG_ERR, "ERROR: calloc() fail");
+			graceful_exit(-1);
+		}
+		
+		int req_size = 0;
+		bool recv_flag = FALSE;
+		while (recv_flag == FALSE) {
+		
+			memset(temp_buf, 0, sizeof(temp_buf));
+			int numbytes = recv(newsockfd, temp_buf, BUF_SIZE, 0);		
 			if(numbytes == -1){
 				log_message(LOG_ERR, "ERROR: recv() fail");
 				graceful_exit(-1);
 			}
-			
-			syslog(LOG_DEBUG, "received string = %s", temp_buf);
+				
+			req_size += numbytes;
+			total_size += req_size;
+			buf = (char *)realloc(buf, req_size+1);
+			if (buf == NULL) {
+				log_message(LOG_ERR, "ERROR: malloc() fail");
+				graceful_exit(-1);
+			}
+
 			
 			strncat(buf, temp_buf, numbytes);	
 			
-			if(numbytes > 0) {
-				
-				req_size += numbytes;
-				total_size += req_size;
-				syslog(LOG_DEBUG, "realloc size = %d", req_size);	
-				buf = (char*)realloc(buf, req_size);
-				if (buf == NULL) {
-					log_message(LOG_ERR, "ERROR: malloc() fail");
-					graceful_exit(-1);
-				}
-			}
+			if(strchr(temp_buf, '\n') != NULL)
+				recv_flag = TRUE;
 			
-			
-		        if(strchr(temp_buf, '\n') != NULL){
-				break;
-			}
 			
 		}
 	 	
-	 	syslog(LOG_DEBUG, "Full string = %s", buf);
-	 	//Packet fully received
 	 	
 	 	//writing to location
-	 	fd = open("/var/tmp/aesdsocketdata", O_RDWR);
+	 	fd = open(FILE_PATH, O_RDWR);
 	 	
 	 	if( fd == -1 ){
 			log_message(LOG_ERR, "ERROR: open() fail");
@@ -190,12 +234,12 @@ int main(int argc, char *argv[]) {
 
 		lseek(fd, 0, SEEK_SET);
 		int temp = total_size;
-
-		int read_size = read(fd, temp_buf, temp);
+		free(buf);
+		buf = (char *) malloc(temp*(sizeof(char) ));
 		
-		syslog(LOG_DEBUG, "Read string = %s", temp_buf);
+		int read_size = read(fd, buf, temp);
 			
-		rc = send(newsockfd, &temp_buf, read_size, 0);
+		rc = send(newsockfd, buf, read_size, 0);
 			
 		if(rc == -1) {
 			log_message(LOG_ERR, "ERROR: send() fail");
