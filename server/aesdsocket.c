@@ -125,7 +125,7 @@ static void daemon_start(){
  * Signal handler to catch and handle SIGINT and SIGTERM
  */
 static void signal_handler(int signum){
-	syslog(LOG_INFO, "Signal Caught==>%d", signum);
+	syslog(LOG_INFO, "Caught singal, exiting; Signal==>%d", signum);
 	graceful_exit(0); 
 }
 
@@ -135,7 +135,7 @@ int main(int argc, char *argv[]) {
 
 	int rc; 
 	struct addrinfo hints;
-	struct sockaddr cli_addr;
+	struct sockaddr_in cli_addr;
 	bool daemon_fl = FALSE;
 	socklen_t clilen;
 	
@@ -213,6 +213,7 @@ int main(int argc, char *argv[]) {
 	close(fd);
 
 	int total_size = 0;
+	
 	while (1) {				
 
 		newsockfd = accept(sockfd, (struct sockaddr *) &cli_addr, &clilen); //accept the connection
@@ -221,8 +222,8 @@ int main(int argc, char *argv[]) {
 			graceful_exit(-1);
      		}
 	
-
-		log_message(LOG_INFO, "“Accepted connection from %s", cli_addr.sa_data);
+		
+		log_message(LOG_INFO, "Accepted connection from %s", inet_ntoa(cli_addr.sin_addr) );
 		
 		
 		char temp_buf[BUF_SIZE] = {0}; 
@@ -295,6 +296,7 @@ int main(int argc, char *argv[]) {
 
 		free(buf); //free recently malloced buffer
 		close(fd);
+		log_message(LOG_INFO, "Closed connection from %s", inet_ntoa(cli_addr.sin_addr) );
 	}
 	
 	graceful_exit(0);
