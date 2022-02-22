@@ -9,6 +9,7 @@
 *References: 
 *https://beej.us/guide/bgnet/html/#acceptman
 *https://www.tutorialspoint.com/unix_sockets/socket_server_example.htm
+*https://www.geeksforgeeks.org/strftime-function-in-c/
 */
 
 /*Header files*/
@@ -30,6 +31,10 @@
 #include <syslog.h>
 #include <dirent.h>
 #include <libgen.h>
+#include <pthread.h>
+#include <sys/queue.h>
+#include <sys/time.h>
+#include <time.h>
 
 
 
@@ -45,7 +50,23 @@
 struct addrinfo *res ;
 int sockfd, newsockfd;
 int fd;
-char* buf = NULL; 
+pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER; 
+
+
+typedef struct {
+	bool thread_complete;
+	pthread_t thread;
+	int client_sock_fd;
+	pthread_mutex_t *mutex;
+	char *ip_addr;
+	
+	}thread_params_t;
+
+typedef struct slist_data_s slist_data_t;
+struct slist_data_s{
+	thread_params_t thread_param;
+	SLIST_ENTRY(slist_data_s) entries;
+};
 
 
 
@@ -129,6 +150,163 @@ static void signal_handler(int signum){
 	graceful_exit(0); 
 }
 
+int total_size = 0;
+
+void *workerthread_socket(void *param){
+
+	int status, rc;
+	char *buf = NULL;
+	char temp_buf[BUF_SIZE] = {0}; 
+	
+	thread_params_t *thread_param = (thread_params_t *)param;
+	
+	buf = (char*) calloc (BUF_SIZE, sizeof(char)); //malloc an array of arbitrary size to be realloced later depending on the size of received data
+		
+	if (buf == NULL) {
+		log_message(LOG_ERR, "ERROR: calloc() fail");
+		graceful_exit(-1);
+	}
+	
+	int req_size = 0;
+	bool recv_flag = FALSE;
+	while (recv_flag == FALSE) { //Recieve until "\n" is received
+	
+		memset(temp_buf, 0, sizeof(temp_buf));
+		int numbytes = recv(thread_param->client_sock_fd, temp_buf, BUF_SIZE, 0); //Receive data		
+		if(numbytes == -1){
+			log_message(LOG_ERR, "ERROR: recv() fail");
+			graceful_exit(-1);
+		}
+				
+		req_size += numbytes; 
+		total_size += req_size;
+		buf = (char *)realloc(buf, req_size+1); //Realloc data as required
+			
+		if (buf == NULL) {
+			log_message(LOG_ERR, "ERROR: malloc() fail");
+			graceful_exit(-1);
+		}
+			
+		strncat(buf, temp_buf, numbytes);	//Append to the buffer
+			
+		if(strchr(temp_buf, '\n') != NULL) //Check if "\n" is specified
+			recv_flag = TRUE;
+			
+			
+	}
+	 	
+	 	
+	//writing to location
+	fd = open(FILE_PATH, O_RDWR|O_APPEND);
+	 	
+	if( fd == -1 ){
+		log_message(LOG_ERR, "ERROR: open() fail");
+		graceful_exit(-1);
+	}
+	
+	status = pthread_mutex_lock(thread_param->mutex);
+	if(status) {
+		log_message(LOG_ERR, "ERROR: mutex_lock() fail");
+		graceful_exit(-1);
+	}
+	
+	//lseek(fd, 0, SEEK_END); //Write to EOF
+	rc = write(fd, buf, req_size);
+	if(rc == -1){
+		log_message(LOG_ERR, "ERROR: write() fail");
+		graceful_exit(-1);
+	}
+	
+	status = pthread_mutex_unlock(thread_param->mutex);
+	if(status) {
+		log_message(LOG_ERR, "ERROR: mutex_lock() fail");
+		graceful_exit(-1);
+	}
+	
+	lseek(fd, 0, SEEK_SET); //Read from beginning of file
+	int temp = total_size;
+	free(buf);
+	buf = (char *) malloc(temp*(sizeof(char) )); //Malloc buf to read from file
+		
+	
+	status = pthread_mutex_lock(thread_param->mutex);
+	if(status) {
+		log_message(LOG_ERR, "ERROR: mutex_lock() fail");
+		graceful_exit(-1);
+	}
+	int read_size = read(fd, buf, temp);
+			
+	syslog(LOG_DEBUG, "Read string = %s", buf);
+	rc = send(thread_param->client_sock_fd, buf, read_size, 0); //send to client
+			
+	if(rc == -1) {
+		log_message(LOG_ERR, "ERROR: send() fail");
+		graceful_exit(-1);
+	}
+	
+	status = pthread_mutex_unlock(thread_param->mutex);
+	if(status) {
+		log_message(LOG_ERR, "ERROR: mutex_lock() fail");
+		graceful_exit(-1);
+	}
+	
+	thread_param->thread_complete = TRUE;
+	
+	free(buf); //free recently malloced buffer
+	close(fd);
+	close(thread_param->client_sock_fd);
+	//log_message(LOG_INFO, "Closed connection from %s", thread_param->ip_addr );
+	
+	return (thread_param);
+
+}
+
+
+static void time_handler(int sig_num) {
+
+	char timestamp[100];
+	time_t t;
+	struct tm *tmp;
+	time(&t);
+	int len, rc;
+	
+	tmp = localtime(&t);
+	len = strftime(timestamp, sizeof(timestamp), "timestamp: %k:%M:%S- %d.%b.%Y\n", tmp);
+	
+	
+	rc = pthread_mutex_lock(&lock);
+
+	if(rc){
+		log_message(LOG_ERR, "ERROR: lock() fail");
+		graceful_exit(-1);
+	}
+	
+	
+	fd = open(FILE_PATH, O_RDWR|O_APPEND);
+	if( fd == -1 ){
+		log_message(LOG_ERR, "ERROR: open() fail");
+		graceful_exit(-1);
+	}
+
+	
+	
+
+	//lseek(fd, 0, SEEK_END); //Write to EOF
+	rc = write(fd, timestamp, len);
+	syslog(LOG_DEBUG, "stamp = %s", timestamp);
+	if(rc == -1){
+		log_message(LOG_ERR, "ERROR: write() fail");
+		graceful_exit(-1);
+	}
+	
+	pthread_mutex_unlock(&lock);
+	if(rc == -1){
+		log_message(LOG_ERR, "ERROR: unlock() fail");
+		graceful_exit(-1);
+	}
+	close(fd);
+
+} 
 
 /* Application entry point */
 int main(int argc, char *argv[]) {
@@ -138,7 +316,11 @@ int main(int argc, char *argv[]) {
 	struct sockaddr_in cli_addr;
 	bool daemon_fl = FALSE;
 	socklen_t clilen;
+	slist_data_t *datap = NULL;
+
 	
+	SLIST_HEAD(slisthead, slist_data_s) head;
+	SLIST_INIT(&head);
 	
 	if( argc > 1 && !strcmp("-d", (char *)argv[1]) ) //Check to see if -d was specified
 		daemon_fl = TRUE;	
@@ -212,91 +394,58 @@ int main(int argc, char *argv[]) {
 	}
 	close(fd);
 
-	int total_size = 0;
+
+	pthread_mutex_init( &lock, NULL);
+	
+	
+	signal(SIGALRM, time_handler);
+	struct itimerval timer_val;
+	//Loading initial value as 10 and the reload value as 10
+    	timer_val.it_value.tv_sec = 10;
+    	timer_val.it_value.tv_usec = 0;
+   	timer_val.it_interval.tv_sec = 10;
+    	timer_val.it_interval.tv_usec = 0;
+    	
+    	rc = setitimer(ITIMER_REAL, &timer_val, NULL);
+    	if(rc) {
+    		log_message(LOG_ERR, "ERROR: setitimer() fail");
+		graceful_exit(-1);	
+    	}
+    	
 	
 	while (1) {				
-
+		
 		newsockfd = accept(sockfd, (struct sockaddr *) &cli_addr, &clilen); //accept the connection
     	        if (newsockfd < 0) {
       			log_message(LOG_ERR, "ERROR: accept() fail");
 			graceful_exit(-1);
      		}
 	
-		
 		log_message(LOG_INFO, "Accepted connection from %s", inet_ntoa(cli_addr.sin_addr) );
+			
+		datap = (slist_data_t *) malloc (sizeof(slist_data_t));// Allocating memory for a new node
+		SLIST_INSERT_HEAD(&head, datap, entries); //Added new node to the link list
 		
+		//Filling in the thread parameters
+		datap->thread_param.thread_complete = FALSE;
+		datap->thread_param.client_sock_fd = newsockfd;
+		datap->thread_param.mutex = &lock;
+		//strcpy(datap->thread_param.ip_addr, inet_ntoa(cli_addr.sin_addr));
 		
-		char temp_buf[BUF_SIZE] = {0}; 
+		pthread_create(&(datap->thread_param.thread), NULL, workerthread_socket, &(datap->thread_param) );
 		
-		buf = (char*) calloc (BUF_SIZE, sizeof(char)); //malloc an array of arbitrary size to be realloced later depending on the size of received data
-		
-		if (buf == NULL){
-			log_message(LOG_ERR, "ERROR: calloc() fail");
-			graceful_exit(-1);
-		}
-		
-		int req_size = 0;
-		bool recv_flag = FALSE;
-		while (recv_flag == FALSE) { //Recieve until "\n" is received
-		
-			memset(temp_buf, 0, sizeof(temp_buf));
-			int numbytes = recv(newsockfd, temp_buf, BUF_SIZE, 0); //Receive data		
-			if(numbytes == -1){
-				log_message(LOG_ERR, "ERROR: recv() fail");
-				graceful_exit(-1);
+		SLIST_FOREACH(datap, &head, entries){
+			if(datap->thread_param.thread_complete == TRUE) {
+				pthread_join(datap->thread_param.thread, NULL);	
+				datap = SLIST_FIRST(&head);
+				SLIST_REMOVE_HEAD(&head, entries);
+				free(datap);
 			}
-				
-			req_size += numbytes; 
-			total_size += req_size;
-			buf = (char *)realloc(buf, req_size+1); //Realloc data as required
-			
-			if (buf == NULL) {
-				log_message(LOG_ERR, "ERROR: malloc() fail");
-				graceful_exit(-1);
-			}
-
-			
-			strncat(buf, temp_buf, numbytes);	//Append to the buffer
-			
-			if(strchr(temp_buf, '\n') != NULL) //Check if "\n" is specified
-				recv_flag = TRUE;
-			
-			
-		}
-	 	
-	 	
-	 	//writing to location
-	 	fd = open(FILE_PATH, O_RDWR);
-	 	
-	 	if( fd == -1 ){
-			log_message(LOG_ERR, "ERROR: open() fail");
-			graceful_exit(-1);
-		}
-		lseek(fd, 0, SEEK_END); //Write to EOF
-		rc = write(fd, buf, req_size);
-		if(rc == -1){
-			log_message(LOG_ERR, "ERROR: write() fail");
-			graceful_exit(-1);
+		
 		}
 		
-
-		lseek(fd, 0, SEEK_SET); //Read from beginning of file
-		int temp = total_size;
-		free(buf);
-		buf = (char *) malloc(temp*(sizeof(char) )); //Malloc buf to read from file
 		
-		int read_size = read(fd, buf, temp);
 			
-		rc = send(newsockfd, buf, read_size, 0); //send to client
-			
-		if(rc == -1) {
-			log_message(LOG_ERR, "ERROR: send() fail");
-			graceful_exit(-1);
-		}
-
-		free(buf); //free recently malloced buffer
-		close(fd);
-		log_message(LOG_INFO, "Closed connection from %s", inet_ntoa(cli_addr.sin_addr) );
 	}
 	
 	graceful_exit(0);
