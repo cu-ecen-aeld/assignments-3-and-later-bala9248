@@ -1,8 +1,19 @@
-CC= $(CROSS_COMPILE)gcc
-CFLAGS= -g -Wall 
+ifeq ($(CC),)
+	CC= $(CROSS_COMPILE)gcc
+endif
+
+ifeq ($(CFLAGS),)
+	CFLAGS= -g -Wall
+endif
+ 
+ifeq ($(LDFLAGS),)
+	LDFLAGS= -pthread 
+endif
+
 TARGET= aesdsocket
 SRCS:= aesdsocket.c
-LDFLAGS= -pthread 
+
+
 default: $(TARGET)
 all: $(TARGET)
 
