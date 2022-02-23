@@ -47,7 +47,7 @@
 #define FILE_PATH "/var/tmp/aesdsocketdata"
 #define BUF_SIZE (100)
 
-struct addrinfo *res ;
+
 int sockfd, newsockfd;
 int fd;
 pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER; 
@@ -83,6 +83,7 @@ struct slist_data_s{
  *   None
  */
 static void graceful_exit(int status){
+
 
 	if(sockfd > -1){ //socket fd closed
 		shutdown(sockfd, SHUT_RDWR);
@@ -197,7 +198,7 @@ void *workerthread_socket(void *param){
 	 	
 	 	
 	//writing to location
-	fd = open(FILE_PATH, O_RDWR|O_APPEND);
+	fd = open(FILE_PATH, O_CREAT|O_RDWR|O_APPEND, 0644);
 	 	
 	if( fd == -1 ){
 		log_message(LOG_ERR, "ERROR: open() fail");
@@ -236,7 +237,6 @@ void *workerthread_socket(void *param){
 	}
 	int read_size = read(fd, buf, temp);
 			
-	syslog(LOG_DEBUG, "Read string = %s", buf);
 	rc = send(thread_param->client_sock_fd, buf, read_size, 0); //send to client
 			
 	if(rc == -1) {
@@ -255,7 +255,7 @@ void *workerthread_socket(void *param){
 	free(buf); //free recently malloced buffer
 	close(fd);
 	close(thread_param->client_sock_fd);
-	//log_message(LOG_INFO, "Closed connection from %s", thread_param->ip_addr );
+
 	
 	return (thread_param);
 
@@ -269,7 +269,7 @@ static void time_handler(int sig_num) {
 	struct tm *tmp;
 	time(&t);
 	int len, rc;
-	
+
 	tmp = localtime(&t);
 	len = strftime(timestamp, sizeof(timestamp), "timestamp: %k:%M:%S- %d.%b.%Y\n", tmp);
 	
@@ -282,7 +282,7 @@ static void time_handler(int sig_num) {
 	}
 	
 	
-	fd = open(FILE_PATH, O_RDWR|O_APPEND);
+	fd = open(FILE_PATH, O_CREAT|O_RDWR|O_APPEND, 0644);
 	if( fd == -1 ){
 		log_message(LOG_ERR, "ERROR: open() fail");
 		graceful_exit(-1);
@@ -293,6 +293,7 @@ static void time_handler(int sig_num) {
 
 	//lseek(fd, 0, SEEK_END); //Write to EOF
 	rc = write(fd, timestamp, len);
+	total_size += len;
 	syslog(LOG_DEBUG, "stamp = %s", timestamp);
 	if(rc == -1){
 		log_message(LOG_ERR, "ERROR: write() fail");
@@ -304,6 +305,7 @@ static void time_handler(int sig_num) {
 		log_message(LOG_ERR, "ERROR: unlock() fail");
 		graceful_exit(-1);
 	}
+
 	close(fd);
 
 } 
@@ -317,7 +319,7 @@ int main(int argc, char *argv[]) {
 	bool daemon_fl = FALSE;
 	socklen_t clilen;
 	slist_data_t *datap = NULL;
-
+	struct addrinfo *res, *ptr;
 	
 	SLIST_HEAD(slisthead, slist_data_s) head;
 	SLIST_INIT(&head);
@@ -352,25 +354,39 @@ int main(int argc, char *argv[]) {
 	rc = getaddrinfo(NULL, MYPORT, &hints, &res);
 	
 	//getaddrinfo gets address that we need to bind to.
-	
 	if(rc){
 		log_message(LOG_ERR, "ERROR: getaddrinfo() fail");
 		graceful_exit(-1);
 	}
 	
-	sockfd = socket(res->ai_family, res->ai_socktype, 0);
-	if(sockfd == -1) {
-		log_message(LOG_ERR, "ERROR: socket() fail"); //socket() failed
-		graceful_exit(-1);
-	}	
+	for (ptr = res; ptr != NULL; ptr = ptr->ai_next) {
 	
-	rc = bind(sockfd, res->ai_addr, res->ai_addrlen);
-	if (rc) {
-		log_message(LOG_ERR, "ERROR: bind() fail");
-		graceful_exit(-1);
+		sockfd = socket(res->ai_family, res->ai_socktype, 0);
+		if(sockfd == -1) {
+			log_message(LOG_ERR, "ERROR: socket() fail"); //socket() failed
+			graceful_exit(-1);
+		}	
+	
+		rc = setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &(int){1}, sizeof(int)) ;
+	
+		if (rc < 0) {
+			log_message(LOG_ERR, "ERROR: sockopt() fail");
+			graceful_exit(-1);
+    		}
+	
+		rc = bind(sockfd, res->ai_addr, res->ai_addrlen);
+		if (!rc) {
+			log_message(LOG_INFO, "Successfully Bound");
+			break;
+		}
 	}
 	
 	freeaddrinfo(res); 
+	
+	if(ptr == NULL) {
+		log_message(LOG_ERR, "ERROR: bind() fail");
+		graceful_exit(-1);		
+	}
 	
 	if(daemon_fl == TRUE){ //If -d was specified, run program as daemon
 		syslog(LOG_INFO, "Running as daemon");
@@ -435,11 +451,12 @@ int main(int argc, char *argv[]) {
 		pthread_create(&(datap->thread_param.thread), NULL, workerthread_socket, &(datap->thread_param) );
 		
 		SLIST_FOREACH(datap, &head, entries){
+			pthread_join(datap->thread_param.thread, NULL);	
 			if(datap->thread_param.thread_complete == TRUE) {
-				pthread_join(datap->thread_param.thread, NULL);	
 				datap = SLIST_FIRST(&head);
 				SLIST_REMOVE_HEAD(&head, entries);
 				free(datap);
+				log_message(LOG_INFO, "Closed connection from %s", inet_ntoa(cli_addr.sin_addr) );
 			}
 		
 		}
