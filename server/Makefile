@@ -13,16 +13,13 @@ endif
 TARGET= aesdsocket
 SRCS:= aesdsocket.c
 
-
 default: $(TARGET)
 all: $(TARGET)
 
 
-$(TARGET): $(TARGET).o
-	$(CC) $(CFLAGS) $(LDFLAGS) $(TARGET).o -o $(TARGET)
-	
-$(TARGET).o: $(SRCS)
-	$(CC) $(CFLAGS) $(LDFLAGS) -c -o $(TARGET).o $(SRCS)
+$(TARGET): $(SRCS) 
+	$(CC) $(CFLAGS) $^ -o $@ $(INCLUDES) $(LDFLAGS)
+
 
 clean: 	
 	rm -f *.o $(TARGET) *.elf *.map
