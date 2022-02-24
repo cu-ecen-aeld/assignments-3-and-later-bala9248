@@ -348,7 +348,7 @@ int main(int argc, char *argv[]) {
 	//Populate the hints structure
 	memset(&hints, 0, sizeof(hints) );
 	hints.ai_flags = AI_PASSIVE;
-	hints.ai_family = AF_INET; 
+	hints.ai_family = AF_INET6; 
 	hints.ai_socktype = SOCK_STREAM;
 
 	rc = getaddrinfo(NULL, MYPORT, &hints, &res);
