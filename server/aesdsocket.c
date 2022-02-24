@@ -271,7 +271,7 @@ static void time_handler(int sig_num) {
 	int len, rc;
 
 	tmp = localtime(&t);
-	len = strftime(timestamp, sizeof(timestamp), "timestamp: %k:%M:%S- %d.%b.%Y\n", tmp);
+	len = strftime(timestamp, sizeof(timestamp), "timestamp:%k:%M:%S- %d.%b.%Y\n", tmp);
 	
 	
 	rc = pthread_mutex_lock(&lock);
