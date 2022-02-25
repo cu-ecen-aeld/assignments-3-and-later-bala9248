@@ -52,7 +52,9 @@ int sockfd, newsockfd;
 int fd;
 pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER; 
 
-
+/*
+ *Thread parameters
+ */
 typedef struct {
 	bool thread_complete;
 	pthread_t thread;
@@ -62,13 +64,18 @@ typedef struct {
 	
 	}thread_params_t;
 
+
+/*
+ * Node of a linked list
+ */
 typedef struct slist_data_s slist_data_t;
 struct slist_data_s{
 	thread_params_t thread_param;
 	SLIST_ENTRY(slist_data_s) entries;
 };
 
-
+//declare the head for linked list
+SLIST_HEAD(slisthead, slist_data_s) head;
 
 /*
  * static void graceful_exit(int status)
@@ -84,7 +91,20 @@ struct slist_data_s{
  */
 static void graceful_exit(int status){
 
-
+	//Parse through the LL and join, close all fds, free pointers
+	slist_data_t *datap = NULL;	
+	SLIST_FOREACH(datap, &head, entries){
+		close(datap->thread_param.client_sock_fd);
+		pthread_join(datap->thread_param.thread, NULL);	
+		datap = SLIST_FIRST(&head);
+		SLIST_REMOVE_HEAD(&head, entries);
+		free(datap);
+		
+	}
+	
+	//Destroy mutex
+    	pthread_mutex_destroy(&lock);
+    	
 	if(sockfd > -1){ //socket fd closed
 		shutdown(sockfd, SHUT_RDWR);
 		close(sockfd);
@@ -151,9 +171,21 @@ static void signal_handler(int signum){
 	graceful_exit(0); 
 }
 
-int total_size = 0;
 
-void *workerthread_socket(void *param){
+static int total_size = 0; //To keep track of the size of the file
+
+/*
+ * void *workerthread_socket(void *param)
+ *
+ * Thread to Receive content from client, write to file, and send back to client
+ *
+ * Parameters:
+ *		Thread parameters
+ *
+ * Returns:
+ *   		Thread_param to check if completed successfully
+ */
+static void *workerthread_socket(void *param){
 
 	int status, rc;
 	char *buf = NULL;
@@ -205,24 +237,25 @@ void *workerthread_socket(void *param){
 		graceful_exit(-1);
 	}
 	
-	status = pthread_mutex_lock(thread_param->mutex);
+	status = pthread_mutex_lock(thread_param->mutex); //Lock the critical section
 	if(status) {
 		log_message(LOG_ERR, "ERROR: mutex_lock() fail");
 		graceful_exit(-1);
 	}
 	
-	//lseek(fd, 0, SEEK_END); //Write to EOF
 	rc = write(fd, buf, req_size);
 	if(rc == -1){
 		log_message(LOG_ERR, "ERROR: write() fail");
 		graceful_exit(-1);
 	}
 	
+	//unlock after write
 	status = pthread_mutex_unlock(thread_param->mutex);
 	if(status) {
 		log_message(LOG_ERR, "ERROR: mutex_lock() fail");
 		graceful_exit(-1);
 	}
+	
 	
 	lseek(fd, 0, SEEK_SET); //Read from beginning of file
 	int temp = total_size;
@@ -230,7 +263,7 @@ void *workerthread_socket(void *param){
 	buf = (char *) malloc(temp*(sizeof(char) )); //Malloc buf to read from file
 		
 	
-	status = pthread_mutex_lock(thread_param->mutex);
+	status = pthread_mutex_lock(thread_param->mutex); //Lock before reading
 	if(status) {
 		log_message(LOG_ERR, "ERROR: mutex_lock() fail");
 		graceful_exit(-1);
@@ -244,7 +277,7 @@ void *workerthread_socket(void *param){
 		graceful_exit(-1);
 	}
 	
-	status = pthread_mutex_unlock(thread_param->mutex);
+	status = pthread_mutex_unlock(thread_param->mutex); //Unlock after sending
 	if(status) {
 		log_message(LOG_ERR, "ERROR: mutex_lock() fail");
 		graceful_exit(-1);
@@ -255,13 +288,23 @@ void *workerthread_socket(void *param){
 	free(buf); //free recently malloced buffer
 	close(fd);
 	close(thread_param->client_sock_fd);
-
 	
 	return (thread_param);
 
 }
 
-
+/*
+ * static void time_handler(int sig_num)
+ *
+ * Signal handler for SIGALRM, SIGALRM is triggered every 10seconds.
+ * Timestamp is written in the file with mutex locking
+ *
+ * Parameters:
+ *		sig_num -> signal number
+ *
+ * Returns:
+ *   		None
+ */
 static void time_handler(int sig_num) {
 
 	char timestamp[100];
@@ -270,9 +313,11 @@ static void time_handler(int sig_num) {
 	time(&t);
 	int len, rc;
 
+	//Obtain the local time and print in the required format
 	tmp = localtime(&t);
 	len = strftime(timestamp, sizeof(timestamp), "timestamp:%a:%d:%b %Y %T %z\n", tmp);
-	
+
+	//Writing to the file with locking
 	rc = pthread_mutex_lock(&lock);
 
 	if(rc){
@@ -316,8 +361,8 @@ int main(int argc, char *argv[]) {
 	slist_data_t *datap = NULL;
 	struct addrinfo *res, *ptr;
 	
-	SLIST_HEAD(slisthead, slist_data_s) head;
-	SLIST_INIT(&head);
+
+	SLIST_INIT(&head); //Initialize the head
 	
 	if( argc > 1 && !strcmp("-d", (char *)argv[1]) ) //Check to see if -d was specified
 		daemon_fl = TRUE;	
@@ -354,6 +399,8 @@ int main(int argc, char *argv[]) {
 		graceful_exit(-1);
 	}
 	
+	
+	//Try recursively binding to the socket
 	for (ptr = res; ptr != NULL; ptr = ptr->ai_next) {
 	
 		sockfd = socket(res->ai_family, res->ai_socktype, 0);
@@ -376,7 +423,7 @@ int main(int argc, char *argv[]) {
 		}
 	}
 	
-	freeaddrinfo(res); 
+	freeaddrinfo(res); //No longer required
 	
 	if(ptr == NULL) {
 		log_message(LOG_ERR, "ERROR: bind() fail");
@@ -406,10 +453,11 @@ int main(int argc, char *argv[]) {
 	close(fd);
 
 
-	pthread_mutex_init( &lock, NULL);
+	pthread_mutex_init( &lock, NULL); //Initialize the mutex
 	
 	
-	signal(SIGALRM, time_handler);
+	signal(SIGALRM, time_handler); //Initialize the signal handler for SIGALRMs
+	
 	struct itimerval timer_val;
 	//Loading initial value as 10 and the reload value as 10
     	timer_val.it_value.tv_sec = 10;
@@ -417,13 +465,12 @@ int main(int argc, char *argv[]) {
    	timer_val.it_interval.tv_sec = 10;
     	timer_val.it_interval.tv_usec = 0;
     	
-    	rc = setitimer(ITIMER_REAL, &timer_val, NULL);
+    	rc = setitimer(ITIMER_REAL, &timer_val, NULL); //Start interval timer
     	if(rc) {
     		log_message(LOG_ERR, "ERROR: setitimer() fail");
 		graceful_exit(-1);	
     	}
     	
-	
 	while (1) {				
 		
 		newsockfd = accept(sockfd, (struct sockaddr *) &cli_addr, &clilen); //accept the connection
@@ -441,13 +488,14 @@ int main(int argc, char *argv[]) {
 		datap->thread_param.thread_complete = FALSE;
 		datap->thread_param.client_sock_fd = newsockfd;
 		datap->thread_param.mutex = &lock;
-		//strcpy(datap->thread_param.ip_addr, inet_ntoa(cli_addr.sin_addr));
 		
+		//Create thread for current node
 		pthread_create(&(datap->thread_param.thread), NULL, workerthread_socket, &(datap->thread_param) );
 		
-		SLIST_FOREACH(datap, &head, entries){
+		SLIST_FOREACH(datap, &head, entries){ //Traverse Linked list
 			pthread_join(datap->thread_param.thread, NULL);	
 			if(datap->thread_param.thread_complete == TRUE) {
+				close(datap->thread_param.client_sock_fd);
 				datap = SLIST_FIRST(&head);
 				SLIST_REMOVE_HEAD(&head, entries);
 				free(datap);
