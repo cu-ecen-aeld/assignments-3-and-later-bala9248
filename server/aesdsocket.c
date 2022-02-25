@@ -271,8 +271,7 @@ static void time_handler(int sig_num) {
 	int len, rc;
 
 	tmp = localtime(&t);
-	len = strftime(timestamp, sizeof(timestamp), "timestamp:%k:%M:%S- %d.%b.%Y\n", tmp);
-	
+	len = strftime(timestamp, sizeof(timestamp), "timestamp:%a:%d:%b %Y %T %z\n", tmp);
 	
 	rc = pthread_mutex_lock(&lock);
 
@@ -288,10 +287,6 @@ static void time_handler(int sig_num) {
 		graceful_exit(-1);
 	}
 
-	
-	
-
-	//lseek(fd, 0, SEEK_END); //Write to EOF
 	rc = write(fd, timestamp, len);
 	total_size += len;
 	syslog(LOG_DEBUG, "stamp = %s", timestamp);
