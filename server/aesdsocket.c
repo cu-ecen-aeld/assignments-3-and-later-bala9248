@@ -99,7 +99,7 @@ static void graceful_exit(int status){
 		datap = SLIST_FIRST(&head);
 		SLIST_REMOVE_HEAD(&head, entries);
 		free(datap);
-		
+		break;
 	}
 	
 	//Destroy mutex
@@ -500,6 +500,7 @@ int main(int argc, char *argv[]) {
 				SLIST_REMOVE_HEAD(&head, entries);
 				free(datap);
 				log_message(LOG_INFO, "Closed connection from %s", inet_ntoa(cli_addr.sin_addr) );
+				break;
 			}
 		
 		}
