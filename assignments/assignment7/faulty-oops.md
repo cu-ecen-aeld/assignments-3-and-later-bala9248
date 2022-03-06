@@ -1,4 +1,4 @@
-#Kernel oops analysis
+# Kernel oops analysis
 
 Unable to handle kernel NULL pointer dereference at virtual address 0000000000000000\
 Mem abort info:\
