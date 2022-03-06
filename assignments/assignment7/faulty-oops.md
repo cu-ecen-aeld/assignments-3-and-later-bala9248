@@ -44,5 +44,5 @@ Call trace:\
  el0_sync_handler+0xb0/0xc0\
  el0_sync+0x174/0x180\
 Code: d2800001 d2800000 d503233f d50323bf (b900003f) \
----[ end trace 2688dc07887a8be6 ]---\
+---[ end trace 2688dc07887a8be6 ]---
 
