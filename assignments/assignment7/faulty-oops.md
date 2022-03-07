@@ -46,3 +46,11 @@ Call trace:\
 Code: d2800001 d2800000 d503233f d50323bf (b900003f) \
 ---[ end trace 2688dc07887a8be6 ]---
 
+## Analysis:
+
+The above kernel oops was caused by a page fault in the kernel.\
+"Unable to handle kernel NULL pointer dereference at virtual address 0000000000000000"\
+means that there is NULL reference in faulty_write() and after looking at the code we\
+can see that the NULL pointer dereference is causing the kernel oops.\
+
+
