@@ -44,7 +44,15 @@
 #define FALSE    (0)
 #define TRUE     (1)
 #define log_message syslog
+
+#define USE_AESD_CHAR_DEVICE 1
+
+#ifdef USE_AESD_CHAR_DEVICE
+#define FILE_PATH "/dev/aesdchar"
+#else
 #define FILE_PATH "/var/tmp/aesdsocketdata"
+#endif
+
 #define BUF_SIZE (100)
 
 
@@ -114,16 +122,15 @@ static void graceful_exit(int status){
 		shutdown(newsockfd, SHUT_RDWR);
 		close(newsockfd);
 	}
-	
 	if(fd > -1){ //file fd closed
 		close(fd);
 	}
-	
+
 		
 	unlink(FILE_PATH); //Unlinking the file
 	if (access(FILE_PATH, F_OK) == 0)  
        	remove(FILE_PATH);
-    	
+ 	
 	closelog(); 
 	
 	exit (status);
@@ -228,7 +235,6 @@ static void *workerthread_socket(void *param){
 			
 	}
 	 	
-	 	
 	//writing to location
 	fd = open(FILE_PATH, O_CREAT|O_RDWR|O_APPEND, 0644);
 	 	
@@ -293,6 +299,9 @@ static void *workerthread_socket(void *param){
 
 }
 
+
+#ifndef USE_AESD_CHAR_DEVICE
+
 /*
  * static void time_handler(int sig_num)
  *
@@ -349,6 +358,8 @@ static void time_handler(int sig_num) {
 	close(fd);
 
 } 
+
+#endif
 
 /* Application entry point */
 int main(int argc, char *argv[]) {
@@ -444,7 +455,6 @@ int main(int argc, char *argv[]) {
 	
 	
 	clilen = sizeof(cli_addr);
-	
 	fd = creat(FILE_PATH, 0644); //create a file to store the received content
 	if( fd == -1 ){
 		log_message(LOG_ERR, "ERROR: creat() fail");
@@ -452,9 +462,9 @@ int main(int argc, char *argv[]) {
 	}
 	close(fd);
 
-
 	pthread_mutex_init( &lock, NULL); //Initialize the mutex
 	
+#ifndef USE_AESD_CHAR_DEVICE
 	
 	signal(SIGALRM, time_handler); //Initialize the signal handler for SIGALRMs
 	
@@ -470,7 +480,8 @@ int main(int argc, char *argv[]) {
     		log_message(LOG_ERR, "ERROR: setitimer() fail");
 		graceful_exit(-1);	
     	}
-    	
+#endif
+
 	while (1) {				
 		
 		newsockfd = accept(sockfd, (struct sockaddr *) &cli_addr, &clilen); //accept the connection
