@@ -465,7 +465,6 @@ int main(int argc, char *argv[]) {
 	pthread_mutex_init( &lock, NULL); //Initialize the mutex
 	
 #ifndef USE_AESD_CHAR_DEVICE
-	
 	signal(SIGALRM, time_handler); //Initialize the signal handler for SIGALRMs
 	
 	struct itimerval timer_val;
