@@ -58,6 +58,7 @@ ssize_t aesd_read(struct file *filp, char __user *buf, size_t count,
 	if(rc) 
 		return -ERESTARTSYS;
 	
+	//find entry and offset for current f_pos
 	cbfifo = aesd_circular_buffer_find_entry_offset_for_fpos(&dev->cbfifo, *f_pos, &offset_byte);
 	if(cbfifo == NULL)
 		goto clean;
@@ -68,12 +69,15 @@ ssize_t aesd_read(struct file *filp, char __user *buf, size_t count,
 	else 
 		read_bytes = cbfifo->size - offset_byte;
 	
+	//read
 	rc = copy_to_user(buf, cbfifo->buffptr+offset_byte, read_bytes);
 	
 	if (rc != 0) {
 		retval = -EFAULT;
 		goto clean;
 	}
+	
+	//return the read bytes and update f_pos
 	retval = read_bytes;
 	*f_pos += read_bytes;
 	
@@ -86,6 +90,7 @@ clean:
 ssize_t aesd_write(struct file *filp, const char __user *buf, size_t count,
                 loff_t *f_pos)
 {
+	const char *new = NULL;
 	ssize_t retval = -ENOMEM;
 	size_t rem_bytes = 0;
 	int rc ;
@@ -96,6 +101,7 @@ ssize_t aesd_write(struct file *filp, const char __user *buf, size_t count,
 	if(rc) 
 		return -ERESTARTSYS;
 	
+	//If size is 0, allocate size = count
 	if(!dev->buff_entry.size) {
 		dev->buff_entry.buffptr = kmalloc(count*sizeof(char), GFP_KERNEL);
 		
@@ -109,14 +115,19 @@ ssize_t aesd_write(struct file *filp, const char __user *buf, size_t count,
 			goto clean;
 	}
 	
+	//copy from user space buffer 
 	rem_bytes = copy_from_user((void *)&dev->buff_entry.buffptr[dev->buff_entry.size], buf, count);
 	
+
 	retval = count - rem_bytes; //rem bytes is subtracted in case of partial write
 	dev->buff_entry.size += retval;
 	
 	//Check for \n
 	if( strchr(dev->buff_entry.buffptr, '\n') != NULL ) {
-		aesd_circular_buffer_add_entry(&dev->cbfifo, &dev->buff_entry);
+		new = aesd_circular_buffer_add_entry(&dev->cbfifo, &dev->buff_entry);
+	
+		if (new) 
+			kfree(new);
 		
 		//Data has been written to the circular buffer
 		dev->buff_entry.buffptr = NULL;
@@ -125,7 +136,7 @@ ssize_t aesd_write(struct file *filp, const char __user *buf, size_t count,
 	
 	 
 clean:	
-	//kfree(dev->buff_entry.buffptr);
+
 	mutex_unlock(&dev->lock);
 	return retval;
 }
@@ -166,7 +177,7 @@ int aesd_init_module(void)
 	}
 	memset(&aesd_device,0,sizeof(struct aesd_dev));
 
-	
+	//Init cbfifo and mutex
 	mutex_init(&aesd_device.lock);
 	aesd_circular_buffer_init(&aesd_device.cbfifo);
 	result = aesd_setup_cdev(&aesd_device);
@@ -183,7 +194,7 @@ void aesd_cleanup_module(void)
 	dev_t devno = MKDEV(aesd_major, aesd_minor);
 
 	cdev_del(&aesd_device.cdev);
-
+        //deallocate cbfifo
 	cbfifo_cleanup(&aesd_device.cbfifo);
 	unregister_chrdev_region(devno, 1);
 }
